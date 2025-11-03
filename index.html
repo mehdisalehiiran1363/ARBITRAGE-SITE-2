@@ -1,4 +1,3 @@
-Mehdi Salehi
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,15 +20,15 @@ Mehdi Salehi
 <div class="container">
   <h1>Flash Arbitrage Bot</h1>
 
-  <!-- دکمه اتصال به متامسک -->
+  <!-- اتصال به متامسک -->
   <button id="connectBtn">Connect to MetaMask</button>
   <p id="account"></p>
 
-  <!-- ورودی توکن و مقدار -->
+  <!-- ورودی‌ها -->
   <input type="text" id="tokenAddress" placeholder="Token Address (e.g. USDC)" />
-  <input type="number" id="amount" placeholder="Amount (e.g. 1000000 for 1 USDC)" />
+  <input type="number" id="amount" placeholder="Amount (e.g. 1000000 = 1 USDC)" />
 
-  <!-- دکمه شروع آربیتراژ -->
+  <!-- شروع آربیتراژ -->
   <button id="arbitrageBtn" disabled>Start Arbitrage</button>
 
   <p id="status">Status: Not connected</p>
@@ -40,63 +39,59 @@ Mehdi Salehi
 
 <script>
 // --- تنظیمات ---
-const contractAddress = "0x7E7518A3529cb9Edd105B998224AEfCf8A748f0B"; // آدرس جدید Mainnet
+const contractAddress = "0x7E7518A3529cb9Edd105B998224AEfCf8A748f0B";
 let web3, contract, accounts;
 
-// --- ABI از abi.json ---
+// --- بارگذاری ABI ---
 fetch('abi.json')
-  .then(res => res.json())
-  .then(abi => {
-    window.ABI = abi;
-    console.log("ABI loaded");
-  });
+  .then(r => r.json())
+  .then(abi => window.ABI = abi);
 
 // --- اتصال به متامسک ---
 document.getElementById("connectBtn").onclick = async () => {
-  if (window.ethereum) {
-    web3 = new Web3(window.ethereum);
-    try {
-      accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-      document.getElementById("account").innerText = "Connected: " + accounts[0].slice(0, 6) + "..." + accounts[0].slice(-4);
-      document.getElementById("connectBtn").innerText = "Connected";
-      document.getElementById("connectBtn").classList.add("connected");
-      document.getElementById("arbitrageBtn").disabled = false;
-      document.getElementById("status").innerText = "Status: Ready";
+  if (!window.ethereum) return alert("Install MetaMask!");
 
-      // ساخت قرارداد
-      contract = new web3.eth.Contract(window.ABI, contractAddress);
-    } catch (err) {
-      alert("User rejected connection");
-    }
-  } else {
-    alert("Install MetaMask!");
-  }
+  web3 = new Web3(window.ethereum);
+  try {
+    accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+    const short = accounts[0].slice(0,6) + "..." + accounts[0].slice(-4);
+    document.getElementById("account").innerText = "Connected: " + short;
+    document.getElementById("connectBtn").innerText = "Connected";
+    document.getElementById("connectBtn").classList.add("connected");
+    document.getElementById("arbitrageBtn").disabled = false;
+    document.getElementById("status").innerText = "Status: Ready";
+
+    contract = new web3.eth.Contract(window.ABI, contractAddress);
+  } catch { alert("Connection rejected"); }
+};
+
+// --- تنظیم گاز بهینه ---
+const gasSettings = {
+  maxPriorityFeePerGas: web3.utils.toWei('1', 'gwei'),
+  maxFeePerGas: web3.utils.toWei('2.5', 'gwei'),
+  gas: 800000
 };
 
 // --- شروع آربیتراژ ---
 document.getElementById("arbitrageBtn").onclick = async () => {
-  const token = document.getElementById("tokenAddress").value;
+  const token = document.getElementById("tokenAddress").value.trim();
   const amount = document.getElementById("amount").value;
 
-  if (!token || !amount) {
-    alert("Please fill token and amount");
-    return;
-  }
+  if (!token || !amount) return alert("Fill token & amount");
 
-  document.getElementById("status").innerText = "Status: Sending transaction...";
+  document.getElementById("status").innerText = "Status: Sending...";
 
   try {
     await contract.methods.startArbitrage(token, amount).send({
-      from: accounts[0]
+      from: accounts[0],
+      ...gasSettings
     });
-    document.getElementById("status").innerText = "Success! Arbitrage executed!";
+    document.getElementById("status").innerText = "Success! Profit check in Remix!";
   } catch (err) {
-    console.error(err);
-    document.getElementById("status").innerText = "Failed: " + (err.message || "Transaction reverted");
+    document.getElementById("status").innerText = "No profit or reverted";
   }
 };
 </script>
 
 </body>
 </html>
-
