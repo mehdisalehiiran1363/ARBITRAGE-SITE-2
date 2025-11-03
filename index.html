@@ -13,6 +13,7 @@
     #status { margin-top: 20px; font-weight: bold; }
     #connectBtn { background: #28a745; }
     #connectBtn.connected { background: #218838; }
+    #arbitrageBtn:disabled { background: #ccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -42,11 +43,6 @@
 const contractAddress = "0x7E7518A3529cb9Edd105B998224AEfCf8A748f0B";
 let web3, contract, accounts;
 
-// --- بارگذاری ABI ---
-fetch('abi.json')
-  .then(r => r.json())
-  .then(abi => window.ABI = abi);
-
 // --- اتصال به متامسک ---
 document.getElementById("connectBtn").onclick = async () => {
   if (!window.ethereum) return alert("Install MetaMask!");
@@ -58,11 +54,18 @@ document.getElementById("connectBtn").onclick = async () => {
     document.getElementById("account").innerText = "Connected: " + short;
     document.getElementById("connectBtn").innerText = "Connected";
     document.getElementById("connectBtn").classList.add("connected");
-    document.getElementById("arbitrageBtn").disabled = false;
-    document.getElementById("status").innerText = "Status: Ready";
+    document.getElementById("status").innerText = "Status: Loading ABI...";
 
-    contract = new web3.eth.Contract(window.ABI, contractAddress);
-  } catch { alert("Connection rejected"); }
+    // --- صبر کن تا ABI لود بشه ---
+    const abi = await fetch('abi.json').then(r => r.json());
+    contract = new web3.eth.Contract(abi, contractAddress);
+
+    document.getElementById("arbitrageBtn").disabled = false;
+    document.getElementById("status").innerText = "Status: Ready to Arbitrage!";
+  } catch (err) {
+    alert("Connection rejected");
+    console.error(err);
+  }
 };
 
 // --- تنظیم گاز بهینه ---
@@ -79,14 +82,14 @@ document.getElementById("arbitrageBtn").onclick = async () => {
 
   if (!token || !amount) return alert("Fill token & amount");
 
-  document.getElementById("status").innerText = "Status: Sending...";
+  document.getElementById("status").innerText = "Status: Sending transaction...";
 
   try {
     await contract.methods.startArbitrage(token, amount).send({
       from: accounts[0],
       ...gasSettings
     });
-    document.getElementById("status").innerText = "Success! Profit check in Remix!";
+    document.getElementById("status").innerText = "Success! Check profit in Remix!";
   } catch (err) {
     document.getElementById("status").innerText = "No profit or reverted";
   }
