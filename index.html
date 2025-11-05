@@ -1,4 +1,3 @@
-MEHDI salehi
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,7 +41,7 @@ MEHDI salehi
 <script>
 // --- متغیرها ---
 const contractAddress = "0x7E7518A3529cb9Edd105B998224AEfCf8A748f0B";
-let web3, contract, accounts = null, autoInterval = null;
+let web3 = null, contract = null, accounts = null, autoInterval = null;
 
 // --- اتصال به متامسک ---
 document.getElementById("connectBtn").onclick = async () => {
@@ -63,24 +62,28 @@ document.getElementById("connectBtn").onclick = async () => {
     document.getElementById("manualBtn").disabled = false;
     document.getElementById("autoBtn").disabled = false;
     document.getElementById("status").innerText = "Status: Ready!";
-    await estimateGas(); // نمایش گاز
+    document.getElementById("gasInfo").innerText = "Gas: Not estimated";
   } catch (err) {
-    alert("Connection failed");
+    alert("Connection failed. Try again.");
     console.error(err);
   }
 };
 
-// --- تخمین گاز ---
+// --- تخمین گاز (فقط بعد از اتصال) ---
 async function estimateGas() {
-  if (!accounts) return;
+  if (!contract || !accounts) {
+    document.getElementById("gasInfo").innerText = "Gas: Connect first";
+    return 0;
+  }
+
   const token = document.getElementById("tokenAddress").value.trim();
   const amount = document.getElementById("amount").value;
 
   try {
     const gas = await contract.methods.startArbitrage(token, amount).estimateGas({ from: accounts[0] });
     const gasLimit = Math.floor(gas * 1.2);
-    const feeUSD = (gasLimit * 2 * 1e-9 * 3800).toFixed(2); // 2 Gwei, $3800/ETH
-    document.getElementById("gasInfo").innerText = Gas: ~$${feeUSD} (estimated);
+    const feeUSD = (gasLimit * 2 * 1e-9 * 3800).toFixed(2);
+    document.getElementById("gasInfo").innerText = Gas: ~$${feeUSD};
     return gasLimit;
   } catch {
     document.getElementById("gasInfo").innerText = "Gas: No profit (revert)";
@@ -90,16 +93,16 @@ async function estimateGas() {
 
 // --- اجرای آربیتراژ ---
 async function runArbitrage() {
-  if (!accounts) return alert("Connect first!");
-
-  const token = document.getElementById("tokenAddress").value.trim();
-  const amount = document.getElementById("amount").value;
+  if (!contract || !accounts) return alert("Connect first!");
 
   const gasLimit = await estimateGas();
   if (gasLimit === 0) return;
 
   try {
-    await contract.methods.startArbitrage(token, amount).send({
+    await contract.methods.startArbitrage(
+      document.getElementById("tokenAddress").value,
+      document.getElementById("amount").value
+    ).send({
       from: accounts[0],
       gas: gasLimit,
       maxPriorityFeePerGas: web3.utils.toWei('1', 'gwei'),
@@ -124,11 +127,7 @@ document.getElementById("autoBtn").onclick = () => {
     btn.classList.remove("active");
     document.getElementById("status").innerText = "Auto stopped";
   } else {
-    autoInterval = setInterval(async () => {
-      await estimateGas();
-      // فقط وقتی سود داره می‌فرسته (اختیاری)
-      // یا هر ۱۰ ثانیه چک کنه
-    }, 10000);
+    autoInterval = setInterval(estimateGas, 10000);
     btn.innerText = "Stop Auto";
     btn.classList.add("active");
     document.getElementById("status").innerText = "Auto checking every 10s...";
