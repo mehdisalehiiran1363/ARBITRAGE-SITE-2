@@ -1,3 +1,4 @@
+mehdi
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -45,31 +46,41 @@ let web3 = null, contract = null, accounts = null, autoInterval = null;
 
 // --- اتصال به متامسک ---
 document.getElementById("connectBtn").onclick = async () => {
-  if (!window.ethereum) return alert("Install MetaMask!");
+  if (!window.ethereum) {
+    alert("MetaMask not detected! Install it.");
+    return;
+  }
 
   try {
     web3 = new Web3(window.ethereum);
     accounts = await ethereum.request({ method: 'eth_requestAccounts' });
 
-    const short = accounts[0].slice(0,6) + "..." + accounts[0].slice(-4);
+    const short = accounts[0].slice(0, 6) + "..." + accounts[0].slice(-4);
     document.getElementById("account").innerText = "Connected: " + short;
     document.getElementById("connectBtn").innerText = "Connected";
     document.getElementById("connectBtn").classList.add("connected");
 
-    const abi = await fetch('abi.json').then(r => r.json());
+    // --- بارگذاری ABI فقط بعد از اتصال ---
+    const response = await fetch('abi.json');
+    if (!response.ok) throw new Error("ABI not found");
+    const abi = await response.json();
     contract = new web3.eth.Contract(abi, contractAddress);
 
+    // --- فعال کردن دکمه‌ها ---
     document.getElementById("manualBtn").disabled = false;
     document.getElementById("autoBtn").disabled = false;
     document.getElementById("status").innerText = "Status: Ready!";
-    document.getElementById("gasInfo").innerText = "Gas: Not estimated";
+    document.getElementById("gasInfo").innerText = "Gas: Estimating...";
+    
+    // --- اولین تخمین گاز ---
+    estimateGas();
   } catch (err) {
-    alert("Connection failed. Try again.");
-    console.error(err);
+    alert("Connection failed. Check console (F12).");
+    console.error("Connection error:", err);
   }
 };
 
-// --- تخمین گاز (فقط بعد از اتصال) ---
+// --- تخمین گاز ---
 async function estimateGas() {
   if (!contract || !accounts) {
     document.getElementById("gasInfo").innerText = "Gas: Connect first";
@@ -79,13 +90,19 @@ async function estimateGas() {
   const token = document.getElementById("tokenAddress").value.trim();
   const amount = document.getElementById("amount").value;
 
+  if (!token || !amount) {
+    document.getElementById("gasInfo").innerText = "Gas: Fill token & amount";
+    return 0;
+  }
+
   try {
     const gas = await contract.methods.startArbitrage(token, amount).estimateGas({ from: accounts[0] });
     const gasLimit = Math.floor(gas * 1.2);
-    const feeUSD = (gasLimit * 2 * 1e-9 * 3800).toFixed(2);
-    document.getElementById("gasInfo").innerText = Gas: ~$${feeUSD};
+    const ethPrice = 3800; // تقریبی
+    const feeUSD = ((gasLimit * 2 * 1e-9) * ethPrice).toFixed(2);
+    document.getElementById("gasInfo").innerText = Gas: ~$${feeUSD} USD;
     return gasLimit;
-  } catch {
+  } catch (err) {
     document.getElementById("gasInfo").innerText = "Gas: No profit (revert)";
     return 0;
   }
@@ -93,7 +110,10 @@ async function estimateGas() {
 
 // --- اجرای آربیتراژ ---
 async function runArbitrage() {
-  if (!contract || !accounts) return alert("Connect first!");
+  if (!contract || !accounts) {
+    alert("Connect to MetaMask first!");
+    return;
+  }
 
   const gasLimit = await estimateGas();
   if (gasLimit === 0) return;
@@ -109,15 +129,15 @@ async function runArbitrage() {
       maxFeePerGas: web3.utils.toWei('2', 'gwei')
     });
     document.getElementById("status").innerText = "PROFIT! Check Remix!";
-  } catch {
-    document.getElementById("status").innerText = "No profit right now";
+  } catch (err) {
+    document.getElementById("status").innerText = "No profit right now (normal)";
   }
 }
 
-// --- دستی ---
+// --- دکمه دستی ---
 document.getElementById("manualBtn").onclick = runArbitrage;
 
-// --- خودکار ---
+// --- دکمه خودکار ---
 document.getElementById("autoBtn").onclick = () => {
   const btn = document.getElementById("autoBtn");
   if (autoInterval) {
@@ -127,7 +147,9 @@ document.getElementById("autoBtn").onclick = () => {
     btn.classList.remove("active");
     document.getElementById("status").innerText = "Auto stopped";
   } else {
-    autoInterval = setInterval(estimateGas, 10000);
+    autoInterval = setInterval(() => {
+      estimateGas(); // فقط نمایش گاز
+    }, 10000);
     btn.innerText = "Stop Auto";
     btn.classList.add("active");
     document.getElementById("status").innerText = "Auto checking every 10s...";
