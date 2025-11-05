@@ -1,33 +1,27 @@
-mehdi salehi
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Flash Arbitrage Bot</title>
+  <title>Smart Arbitrage Bot</title>
   <style>
     body { font-family: Arial; text-align: center; margin-top: 50px; background: #f0f2f5; }
     .container { max-width: 600px; margin: auto; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    input, button { padding: 12px; margin: 10px; width: 90%; border-radius: 8px; border: 1px solid #ccc; }
-    button { background: #007bff; color: white; font-weight: bold; cursor: pointer; }
-    button:hover { background: #0056b3; }
+    button { padding: 12px; margin: 10px; width: 90%; border-radius: 8px; }
+    #connectBtn { background: #28a745; color: white; }
+    #startBtn { background: #007bff; color: white; }
     #status { margin-top: 20px; font-weight: bold; }
-    #connectBtn { background: #28a745; }
-    #connectBtn.connected { background: #218838; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h1>Flash Arbitrage Bot</h1>
+  <h1>Smart Arbitrage Bot</h1>
 
   <button id="connectBtn">Connect to MetaMask</button>
   <p id="account"></p>
 
-  <input type="text" id="tokenAddress" placeholder="Token Address" value="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" />
-  <input type="number" id="amount" placeholder="Amount" value="1000000" />
-
-  <button id="arbitrageBtn" disabled>Start Arbitrage</button>
+  <button id="startBtn" disabled>Start Auto Bot (Every 30s)</button>
 
   <p id="status">Status: Not connected</p>
 </div>
@@ -36,10 +30,17 @@ mehdi salehi
 
 <script>
 // --- تنظیمات ---
-const contractAddress = "0x7E7518A3529cb9Edd105B998224AEfCf8A748f0B";
-let web3, contract, accounts;
+const contractAddress = "0x7E7518A3529cb9Edd105B998224AEfCf8A748f0B"; // آدرس پروکسی
+let web3, contract, accounts, interval;
 
-// --- اتصال به متامسک ---
+// --- توکن‌ها ---
+const tokens = [
+  { addr: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", name: "USDC", amount: 1000000 },
+  { addr: "0xdAC17F958D2ee523a2206206994597C13D831ec7", name: "USDT", amount: 1000000 },
+  { addr: "0x6B175474E89094C44Da98b954EedeAC495271d0F", name: "DAI", amount: 1000000 }
+];
+
+// --- اتصال ---
 document.getElementById("connectBtn").onclick = async () => {
   if (!window.ethereum) return alert("Install MetaMask!");
 
@@ -48,9 +49,8 @@ document.getElementById("connectBtn").onclick = async () => {
     accounts = await ethereum.request({ method: 'eth_requestAccounts' });
     document.getElementById("account").innerText = "Connected: " + accounts[0].slice(0,6) + "..." + accounts[0].slice(-4);
     document.getElementById("connectBtn").innerText = "Connected";
-    document.getElementById("connectBtn").classList.add("connected");
-    document.getElementById("arbitrageBtn").disabled = false;
-    document.getElementById("status").innerText = "Status: Ready";
+    document.getElementById("startBtn").disabled = false;
+    document.getElementById("status").innerText = "Status: Ready! Click Start";
 
     const abi = await fetch('abi.json').then(r => r.json());
     contract = new web3.eth.Contract(abi, contractAddress);
@@ -59,28 +59,49 @@ document.getElementById("connectBtn").onclick = async () => {
   }
 };
 
-// --- شروع آربیتراژ با گاز خیلی کم ---
-document.getElementById("arbitrageBtn").onclick = async () => {
-  const token = document.getElementById("tokenAddress").value.trim();
-  const amount = document.getElementById("amount").value;
-
-  if (!token || !amount) return alert("Fill token & amount");
-
-  document.getElementById("status").innerText = "Status: Trying... (low gas)";
-
-  try {
-    await contract.methods.startArbitrage(token, amount).send({
-      from: accounts[0],
-      gas: 300000,
-      maxPriorityFeePerGas: web3.utils.toWei('0.5', 'gwei'),
-      maxFeePerGas: web3.utils.toWei('1', 'gwei')
-    });
-
-    document.getElementById("status").innerText = "PROFIT! Check Remix!";
-  } catch (err) {
-    document.getElementById("status").innerText = "No profit (only ~$0.02 spent)";
+// --- ربات خودکار ---
+document.getElementById("startBtn").onclick = () => {
+  const btn = document.getElementById("startBtn");
+  if (interval) {
+    clearInterval(interval);
+    interval = null;
+    btn.innerText = "Start Auto Bot";
+    document.getElementById("status").innerText = "Auto stopped";
+  } else {
+    interval = setInterval(runBot, 30000); // هر 30 ثانیه
+    btn.innerText = "Stop Auto Bot";
+    document.getElementById("status").innerText = "Auto running...";
+    runBot(); // اولین اجرا
   }
 };
+
+// --- اجرای ربات ---
+async function runBot() {
+  if (!contract || !accounts) return;
+
+  for (const token of tokens) {
+    try {
+      // --- چک سود رایگان ---
+      const profit = await contract.methods.checkProfit(token.addr, token.amount).call();
+      if (profit > 0) {
+        document.getElementById("status").innerText = PROFIT FOUND! ${token.name} → Sending...;
+
+        await contract.methods.startArbitrage(token.addr, token.amount).send({
+          from: accounts[0],
+          gas: 300000,
+          maxPriorityFeePerGas: web3.utils.toWei('0.5', 'gwei'),
+          maxFeePerGas: web3.utils.toWei('1', 'gwei')
+        });
+
+        document.getElementById("status").innerText = PROFIT! ${token.name} → $${profit / 1e6};
+        return;
+      }
+    } catch (err) {
+      // فقط اگر revert شد، ادامه بده
+    }
+  }
+  document.getElementById("status").innerText = "No profit yet... checking in 30s";
+}
 </script>
 
 </body>
