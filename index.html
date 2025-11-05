@@ -82,14 +82,18 @@ document.getElementById("arbitrageBtn").onclick = async () => {
   try {
     await contract.methods.startArbitrage(token, amount).send({
       from: accounts[0],
-      ...window.gasSettings
+      gas: 800000,
+      maxPriorityFeePerGas: web3.utils.toWei('1', 'gwei'),
+      maxFeePerGas: web3.utils.toWei('2.5', 'gwei')
     });
     document.getElementById("status").innerText = "Success! Check Remix for profit!";
-  } catch {
+  } catch (err) {
     document.getElementById("status").innerText = "No profit right now (normal)";
   }
 };
+  
 </script>
 
 </body>
 </html>
+
