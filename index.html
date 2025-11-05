@@ -1,3 +1,4 @@
+mehdi salehi
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,7 +14,6 @@
     #status { margin-top: 20px; font-weight: bold; }
     #connectBtn { background: #28a745; }
     #connectBtn.connected { background: #218838; }
-    #arbitrageBtn:disabled { background: #ccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -24,8 +24,8 @@
   <button id="connectBtn">Connect to MetaMask</button>
   <p id="account"></p>
 
-  <input type="text" id="tokenAddress" placeholder="Token Address (e.g. USDC)" />
-  <input type="number" id="amount" placeholder="Amount (e.g. 1000000 = 1 USDC)" />
+  <input type="text" id="tokenAddress" placeholder="Token Address (e.g. USDC)" value="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" />
+  <input type="number" id="amount" placeholder="Amount (e.g. 1000000 = 1 USDC)" value="1000000" />
 
   <button id="arbitrageBtn" disabled>Start Arbitrage</button>
 
@@ -46,32 +46,23 @@ document.getElementById("connectBtn").onclick = async () => {
   web3 = new Web3(window.ethereum);
   try {
     accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-    const short = accounts[0].slice(0,6) + "..." + accounts[0].slice(-4);
-    document.getElementById("account").innerText = "Connected: " + short;
+    document.getElementById("account").innerText = "Connected: " + accounts[0].slice(0,6) + "..." + accounts[0].slice(-4);
     document.getElementById("connectBtn").innerText = "Connected";
     document.getElementById("connectBtn").classList.add("connected");
-    document.getElementById("status").innerText = "Status: Loading ABI...";
+    document.getElementById("arbitrageBtn").disabled = false;
+    document.getElementById("status").innerText = "Status: Ready";
 
+    // --- بارگذاری ABI ---
     const abi = await fetch('abi.json').then(r => r.json());
     contract = new web3.eth.Contract(abi, contractAddress);
-
-    // --- گاز بهینه ---
-    window.gasSettings = {
-      maxPriorityFeePerGas: web3.utils.toWei('1', 'gwei'),
-      maxFeePerGas: web3.utils.toWei('2.5', 'gwei'),
-      gas: 800000
-    };
-
-    document.getElementById("arbitrageBtn").disabled = false;
-    document.getElementById("status").innerText = "Status: Ready! Click Start Arbitrage";
   } catch {
     alert("Connection failed");
   }
 };
 
-// --- شروع آربیتراژ ---
+// --- شروع آربیتراژ با گاز کم ---
 document.getElementById("arbitrageBtn").onclick = async () => {
-  const token = document.getElementById("tokenAddress").value.trim();
+  const token = document.getElementById("tokenAddress").value;
   const amount = document.getElementById("amount").value;
 
   if (!token || !amount) return alert("Fill token & amount");
@@ -81,11 +72,13 @@ document.getElementById("arbitrageBtn").onclick = async () => {
   try {
     await contract.methods.startArbitrage(token, amount).send({
       from: accounts[0],
-      ...window.gasSettings
+      gas: 600000,                    // فقط 600k گاز
+      maxPriorityFeePerGas: web3.utils.toWei('1', 'gwei'),
+      maxFeePerGas: web3.utils.toWei('2', 'gwei')
     });
-    document.getElementById("status").innerText = "Success! Check Remix for profit!";
+    document.getElementById("status").innerText = "Success! Check profit in Remix";
   } catch {
-    document.getElementById("status").innerText = "No profit right now (normal)";
+    document.getElementById("status").innerText = "No profit right now";
   }
 };
 </script>
