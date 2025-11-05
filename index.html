@@ -77,15 +77,24 @@ document.getElementById("arbitrageBtn").onclick = async () => {
 
   if (!token || !amount) return alert("Fill token & amount");
 
-  document.getElementById("status").innerText = "Status: Sending...";
+  document.getElementById("status").innerText = "Status: Estimating gas...";
 
   try {
+    const gasEstimate = await contract.methods.startArbitrage(token, amount).estimateGas({
+      from: accounts[0]
+    });
+
+    const gasLimit = Math.floor(gasEstimate * 1.2);
+
+    document.getElementById("status").innerText = "Status: Sending...";
+
     await contract.methods.startArbitrage(token, amount).send({
       from: accounts[0],
-      gas: 800000,
+      gas: gasLimit,
       maxPriorityFeePerGas: web3.utils.toWei('1', 'gwei'),
-      maxFeePerGas: web3.utils.toWei('2.5', 'gwei')
+      maxFeePerGas: web3.utils.toWei('2', 'gwei')
     });
+
     document.getElementById("status").innerText = "Success! Check Remix for profit!";
   } catch (err) {
     document.getElementById("status").innerText = "No profit right now (normal)";
@@ -96,4 +105,5 @@ document.getElementById("arbitrageBtn").onclick = async () => {
 
 </body>
 </html>
+
 
