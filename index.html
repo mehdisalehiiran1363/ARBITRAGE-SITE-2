@@ -1,4 +1,4 @@
-MEHDI SALEHI
+MEHDI salehi
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,6 +16,7 @@ MEHDI SALEHI
     #connectBtn.connected { background: #218838; }
     #autoBtn { background: #ff6b35; }
     #autoBtn.active { background: #d9534f; }
+    #manualBtn:disabled, #autoBtn:disabled { background: #ccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -26,8 +27,8 @@ MEHDI SALEHI
   <button id="connectBtn">Connect to MetaMask</button>
   <p id="account"></p>
 
-  <input type="text" id="tokenAddress" placeholder="Token Address (e.g. USDC)" value="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" />
-  <input type="number" id="amount" placeholder="Amount (e.g. 1000000 = 1 USDC)" value="1000000" />
+  <input type="text" id="tokenAddress" placeholder="Token Address" value="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" />
+  <input type="number" id="amount" placeholder="Amount" value="1000000" />
 
   <button id="manualBtn" disabled>Manual Arbitrage</button>
   <button id="autoBtn" disabled>Auto Every 10s</button>
@@ -39,17 +40,18 @@ MEHDI SALEHI
 <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
 
 <script>
-// --- تنظیمات ---
+// --- متغیرها ---
 const contractAddress = "0x7E7518A3529cb9Edd105B998224AEfCf8A748f0B";
-let web3, contract, accounts, autoInterval;
+let web3, contract, accounts = null, autoInterval = null;
 
 // --- اتصال به متامسک ---
 document.getElementById("connectBtn").onclick = async () => {
   if (!window.ethereum) return alert("Install MetaMask!");
 
-  web3 = new Web3(window.ethereum);
   try {
+    web3 = new Web3(window.ethereum);
     accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+
     const short = accounts[0].slice(0,6) + "..." + accounts[0].slice(-4);
     document.getElementById("account").innerText = "Connected: " + short;
     document.getElementById("connectBtn").innerText = "Connected";
@@ -60,21 +62,25 @@ document.getElementById("connectBtn").onclick = async () => {
 
     document.getElementById("manualBtn").disabled = false;
     document.getElementById("autoBtn").disabled = false;
-    document.getElementById("status").innerText = "Status: Ready! Try Manual or Auto";
-  } catch { alert("Connection failed"); }
+    document.getElementById("status").innerText = "Status: Ready!";
+    await estimateGas(); // نمایش گاز
+  } catch (err) {
+    alert("Connection failed");
+    console.error(err);
+  }
 };
 
 // --- تخمین گاز ---
 async function estimateGas() {
+  if (!accounts) return;
   const token = document.getElementById("tokenAddress").value.trim();
   const amount = document.getElementById("amount").value;
-  if (!token || !amount) return 0;
 
   try {
     const gas = await contract.methods.startArbitrage(token, amount).estimateGas({ from: accounts[0] });
     const gasLimit = Math.floor(gas * 1.2);
-    const fee = gasLimit * 2 * 1e-9; // 2 Gwei
-    document.getElementById("gasInfo").innerText = Gas: ~${(fee * 3800).toFixed(2)} USD;
+    const feeUSD = (gasLimit * 2 * 1e-9 * 3800).toFixed(2); // 2 Gwei, $3800/ETH
+    document.getElementById("gasInfo").innerText = Gas: ~$${feeUSD} (estimated);
     return gasLimit;
   } catch {
     document.getElementById("gasInfo").innerText = "Gas: No profit (revert)";
@@ -84,6 +90,8 @@ async function estimateGas() {
 
 // --- اجرای آربیتراژ ---
 async function runArbitrage() {
+  if (!accounts) return alert("Connect first!");
+
   const token = document.getElementById("tokenAddress").value.trim();
   const amount = document.getElementById("amount").value;
 
@@ -98,15 +106,15 @@ async function runArbitrage() {
       maxFeePerGas: web3.utils.toWei('2', 'gwei')
     });
     document.getElementById("status").innerText = "PROFIT! Check Remix!";
-  } catch (err) {
-    document.getElementById("status").innerText = "No profit (normal)";
+  } catch {
+    document.getElementById("status").innerText = "No profit right now";
   }
 }
 
 // --- دستی ---
 document.getElementById("manualBtn").onclick = runArbitrage;
-  
-// --- خودکار هر 10 ثانیه ---
+
+// --- خودکار ---
 document.getElementById("autoBtn").onclick = () => {
   const btn = document.getElementById("autoBtn");
   if (autoInterval) {
@@ -116,22 +124,17 @@ document.getElementById("autoBtn").onclick = () => {
     btn.classList.remove("active");
     document.getElementById("status").innerText = "Auto stopped";
   } else {
-       autoInterval = setInterval(async () => {
-      await estimateGas(); // فقط نمایش گاز
-      // فقط وقتی سود داره می‌فرسته
-      const profit = await contract.methods.checkProfit(
-        document.getElementById("tokenAddress").value,
-        document.getElementById("amount").value
-      ).call();
-      if (profit > 0) await runArbitrage();
+    autoInterval = setInterval(async () => {
+      await estimateGas();
+      // فقط وقتی سود داره می‌فرسته (اختیاری)
+      // یا هر ۱۰ ثانیه چک کنه
     }, 10000);
     btn.innerText = "Stop Auto";
     btn.classList.add("active");
-    document.getElementById("status").innerText = "Auto running every 10s...";
+    document.getElementById("status").innerText = "Auto checking every 10s...";
   }
 };
 </script>
 
 </body>
 </html>
-
